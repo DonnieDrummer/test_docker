@@ -1,0 +1,61 @@
+version: '3.5'
+
+networks:
+    backend:
+        driver: bridge
+
+services:
+    database:
+        container_name: ${CONTAINER_PREFIX}.database
+        image: mysql:latest
+        environment:
+            MYSQL_DATABASE: ${DB_NAME}
+            MYSQL_USER: ${DB_USERNAME}
+            MYSQL_PASSWORD: ${DB_PASSWORD}
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+        ports:
+            - ${DATABASE_PORT}:3306
+        volumes:
+            - ./shared/data/database:/var/lib/mysql
+        networks:
+            - backend
+    redis:
+        container_name: ${CONTAINER_PREFIX}.redis
+        build: ./containers/redis
+        networks:
+            - backend
+        ports:
+            - ${REDIS_PORT}:6379
+        sysctls:
+            net.core.somaxconn: '511'
+    php-fpm:
+        container_name: ${CONTAINER_PREFIX}.php-fpm
+        build: ./containers/php-fpm
+        working_dir: /var/www/application
+        restart: always
+        expose:
+            - 9000
+        volumes:
+            - ./src/application:/var/www/application:cached
+        networks:
+            - backend
+        depends_on:
+            - database
+    nginx:
+        container_name: ${CONTAINER_PREFIX}.nginx
+        build: ./containers/nginx
+        working_dir: /var/www/application
+        restart: always
+        ports:
+            - ${NGINX_PORT}:80
+        volumes:
+            - ./containers/nginx/conf.d:/etc/nginx/conf.d:ro
+            - ./shared/log/nginx:/var/log/nginx:cached
+            - ./src/application:/var/www/application:cached
+        networks:
+            - backend
+        depends_on:
+            - php-fpm
+            - database
+volumes:
+    database:
